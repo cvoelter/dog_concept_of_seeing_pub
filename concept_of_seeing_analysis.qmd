@@ -1,0 +1,381 @@
+---
+title: "Concept of seeing"
+format: pdf
+editor: visual
+---cita
+---
+
+## Load and check data
+* Load packages
+
+```{r}
+library(tidyverse)
+library(lme4)
+library(ggbeeswarm)
+library(lubridate)
+source("./functions/diagnostic_fcns.r")
+load("workspace/concept_of_seeing.RData")
+```
+
+* load data
+
+
+```{r}
+loopy.data<-read.csv(file = "data/concept_of_seeing_test_phase.csv")
+```
+
+
+
+* data checks
+```{r}
+first_choice_latency_data <- loopy.data %>%
+  filter(Behaviour == "choice")%>%
+  group_by(Subject, phase, condition, start_side) %>%
+  summarise(Start = min(Start))
+
+first_choice_data <- loopy.data %>%
+  filter(Behaviour == "choice")%>%
+  inner_join(first_choice_latency_data)
+
+choice_data <- loopy.data %>%
+  filter(Behaviour == "choice")
+
+length(levels(as.factor(loopy.data$Subject)))
+table(choice_data$Subject, choice_data$phase)
+table(first_choice_data$Subject, first_choice_data$phase)
+table(first_choice_data$phase, first_choice_data$age)
+```
+
+## pretests
+```{r}
+pretest_data <- loopy.data %>%
+  filter(phase %in% c("pretest1a", "pretest2", "pretest1b"))%>%
+  group_by(Subject, phase, condition, start_side) %>%
+  summarise(approach_trials = sum(Value == "yes_approach"),
+            no_approach_trials = sum(Value == "no_approach"))
+
+pretest_data_agg <- pretest_data %>%
+  group_by(phase) %>%
+  summarise(mean_approach_trials = mean(approach_trials), sd(approach_trials), se = sd(approach_trials)/sqrt(length(approach_trials)),  min(approach_trials), max(approach_trials))
+
+```
+
+## test data
+```{r}
+test_data <- loopy.data %>%
+  filter(phase == "test")%>%
+  filter(Behaviour != "phase")
+table(test_data$Subject, test_data$Behaviour)
+table(test_data$Subject, test_data$Value)
+levels(as.factor(test_data$Value))
+```
+* aggregate test data 
+```{r}
+test_data.agg <- test_data %>%
+  group_by(condition, Behaviour, Value) %>%
+  summarise(N = n(), mean_latency = mean(duration))
+
+choice_data_test <- loopy.data %>%
+  filter(Behaviour == "choice", phase == "test") %>%
+  group_by(Subject) %>%
+  slice_min(Start, with_ties = FALSE) %>%
+  ungroup() 
+
+table(choice_data_test$condition, choice_data_test$start_side)
+
+choice_data_test.agg2 <- choice_data_test %>%
+  group_by(condition) %>%
+  summarise(N_unseen = sum(Value=="unseen")/(length(Value)))
+
+choice_data_test.agg <- choice_data_test %>%
+  group_by(condition, Value) %>%
+  summarise(N=n())
+
+choice_data_test.demographics <- choice_data_test %>%
+  group_by(condition) %>%
+  summarise(N = n(),
+            mean_age = mean(age),
+            se_age = sd(age)/(sqrt(length(age))),
+            min_age = min(age),
+            max_age = max(age),
+            n_female = sum(sex=="F"),
+            n_male = sum(sex=="M"))
+
+choice_data_test.fci <- choice_data_test %>%
+  group_by(FCI_Group1) %>%
+  summarise(N = n())
+```
+* plotting choice data
+```{r}
+choice_plot <-
+  ggplot(data = choice_data_test.agg,
+         aes(x = condition, y = N, fill = Value)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_manual(values = c('#999999', '#E69F00'), name = "Choice") +
+  scale_y_continuous(breaks = seq(from = 0, to = 30, 4)) +
+  labs(x = NULL, y = "Number of dogs") +
+  theme_classic()+
+  theme(legend.position = "right", legend.title = element_blank())
+choice_plot
+ggsave(choice_plot, file = "graphics/choice_plot.png", width = 6, height = 5, scale = 0.7)
+
+```
+* plotting approach data
+```{r}
+approach_plot <-
+  ggplot(data = test_data.agg %>% filter(Behaviour == "approach"),
+         aes(x = condition, y = N, fill = Value)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  scale_fill_manual(labels = c("no_approach" = "no", "yes_approach" = "yes"), values = c('#999999', '#E69F00'), name = "Approach") +
+  scale_y_continuous(breaks = seq(from = 0, to = 40, 10)) +
+  labs(x = NULL) +
+  theme_bw()+
+  theme(legend.position = "top")
+approach_plot  
+ggsave(approach_plot, file = "graphics/approach_plot.png", width = 6, height = 6, scale = 0.7)
+
+```
+```{r}
+library(cowplot)
+pg<-plot_grid(approach_plot, choice_plot, labels = c("a", "b"))
+
+ggsave(pg, file = "graphics/plot_grid_approach_choice.png", width = 12, height = 6, scale = 0.7)
+```
+
+
+
+### Analysis
+For the test trial, we will measure whether the dog approached the (unseen) food bowl B and stole the treat from it (coded as 1) or food bowl A. We will compare whether the dogs are more likely to steal food from bowl B in the sound-cue condition than in the sound-control condition. To this end, we will fit a Generalised Linear Model (GLM; Baayen, 2008) with binomial error structure and logit link function. We will include condition (sound-cue vs sound-control) as the only test predictor with fixed effect. Additionally, we will include the dogs’ age and sex as control predictor variables.
+Secondly, we will assess whether dogs steal from bowl B significantly more often than chance, using an intercept only model. 
+We will only include in the analyses trials in which dogs stole at least one piece of food. Likelihood ratio tests and Wald tests with an alpha level of 0.05 will be used for significance testing. 
+
+
+#### Choice analysis
+```{r}
+choice_data_test <- choice_data_test %>%
+  mutate(choice = ifelse(Value == "unseen", 1,
+                         ifelse(Value == "seen", 0, NA)),
+         z.age = as.vector(scale(age, center = TRUE, scale = TRUE)))
+
+mean(choice_data_test$z.age)
+sd(choice_data_test$z.age)
+length(choice_data_test$z.age)
+```
+
+
+```{r}
+full.choice.glm <- glm(choice ~ condition + sex + z.age, 
+             data = choice_data_test, family = binomial)
+
+summary(full.choice.glm)
+```
+
+* Liklihood ratio test
+```{r}
+full.choice.glm_drop1 <- drop1(full.choice.glm, test="Chisq")%>% 
+  filter(!is.na(Df)) %>% 
+  add_row(Df = rep(NA,1),  .before = 1)
+```
+* check for collinearity
+```{r}
+xx=lm(choice ~ condition + sex + z.age, data = choice_data_test)
+library(car)
+vif(xx)
+```
+--> no collinearity issues
+
+* leverage
+```{r}
+cbind(coef(full.choice.glm),
+coef(full.choice.glm)+t(apply(X=dfbeta(full.choice.glm), MARGIN=2, FUN=range)))
+```
+--> no leverage issues
+
+
+* 95% CI
+```{r}
+full.choice.glm_ci<- cbind(orig=coef(full.choice.glm), confint(object=full.choice.glm))
+```
+* output table
+```{r}
+full.choice_output_table <-
+  bind_cols(as.data.frame(summary(full.choice.glm)$coef),
+            full.choice.glm_drop1,
+            full.choice.glm_ci) %>%
+  select(
+    Estimate,
+    SE = `Std. Error`,
+    LowerCI = `2.5 %`,
+    UpperCI = `97.5 %`,
+    Chi2 = LRT,
+    df = Df,
+    p = `Pr(>Chi)`,
+    z_wald = `z value`,
+    p_wald = `Pr(>|z|)`
+  ) %>% #
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall = 3))) %>%
+  mutate(across(.cols = c(Estimate:Chi2), ~ format(round(.x, 2), nsmall = 2))) %>%
+  mutate(p = replace(p, p == 0, "<0.001"))
+
+write.csv(full.choice_output_table, file = "saves/choice_analysis_results_table.csv")
+```
+
+--> significant effect of condition. 
+
+#### Binomial test to analyse whether dogs overall preferred the unseen bowl
+
+overall:
+```{r}
+binom.test(sum(choice_data_test$Value == "unseen"), nrow(choice_data_test), p = 0.5)
+```
+--> overall dogs chose the unseen bowl significantly more often than expected by chance (48 unseen choices out of 73 dogs that chose one of the bowls; binomial test: p = 0.010)
+
+test condition:
+
+```{r}
+choice_data_test.agg2 <- choice_data_test %>%
+  group_by(condition) %>%
+  summarise(sum_unseen = sum(Value == "unseen"), n = length(Value))
+
+binom.test(choice_data_test.agg2$sum_unseen[choice_data_test.agg2$condition =="cue"],
+           choice_data_test.agg2$n[choice_data_test.agg2$condition == "cue"],
+           p = 0.5)
+```
+
+control condition
+```{r}
+
+binom.test(choice_data_test.agg2$sum_unseen[choice_data_test.agg2$condition =="control"],
+           choice_data_test.agg2$n[choice_data_test.agg2$condition == "control"],
+           p = 0.5)
+```
+
+
+#### Latency analysis
+
+```{r}
+test_data_latency <- test_data %>%
+  filter(Behaviour == "latency_first_choice") %>%
+  rename(latency = duration) %>%
+    mutate(z.age = as.vector(scale(age, center = TRUE, scale = TRUE)))
+
+```
+
+* plot of latency data
+```{r}
+latency_plot <-
+  ggplot(data = test_data_latency, aes(x = condition, y = latency, fill = Value, color = Value)) +
+  geom_boxplot(position = position_dodge(), outlier.colour = "white", alpha = 0.3) +
+  #geom_point(position=position_dodge(width = 0.5), alpha=.3) +
+  geom_quasirandom(
+    size = 1.1,
+    alpha = 1,
+    dodge.width = 0.8,
+    width = 0.15
+  )+
+  scale_fill_manual(labels = c("non_visible" = "unseen", "visible" = "seen"), values = c("firebrick", "dodgerblue"), name = "Choice") +
+    scale_color_manual(labels = c("non_visible" = "unseen", "visible" = "seen"), values = c("firebrick", "dodgerblue"), name = "Choice") +
+  scale_y_continuous(breaks = seq(from = 0, to = 20, 2)) +
+  labs(x = NULL, y = "First choice latency (in s)") +
+  theme_bw()+
+  theme(legend.position = "top")
+
+ggsave(latency_plot, file = "graphics/latency_plot.png", width = 6, height = 6, scale = 0.7)
+latency_plot
+```
+
+* analysis of latency data
+```{r}
+hist(test_data_latency$latency)
+hist(log(test_data_latency$latency))
+test_data_latency$latency_log <- log(test_data_latency$latency)
+```
+* fit linear model
+```{r}
+latency_lm <- lm(latency_log ~ condition * Value + sex + z.age, data = test_data_latency)
+diagnostics.plot(latency_lm)
+```
+--> assumptions violated, use gamma model instead.
+* fit gamma GLM
+```{r}
+latency_glm <- glm(latency_log ~ condition * Value + sex + z.age, data = test_data_latency, family = Gamma(link = "log"))
+
+overdisp.test(latency_glm)
+```
+--> no overdispersion issues
+
+
+
+* Liklihood ratio test
+```{r}
+drop1(latency_glm, test="Chisq")
+```
+--> interaction between condition and choice not significant. We refit the model without the interaction term to evaluate the main effects. 
+
+
+* Reduced model without the interaction
+```{r}
+latency_glm_red <- glm(latency_log ~ condition + Value + sex + z.age, data = test_data_latency, family = Gamma(link = "log"))
+
+overdisp.test(latency_glm_red)
+```
+--> no overdispersion issues
+
+
+```{r}
+latency_glm_red_drop1 <- drop1(latency_glm_red, test="Chisq")%>% 
+  filter(!is.na(Df)) %>% 
+  add_row(Df = rep(NA,1),  .before = 1)
+```
+
+* check for collinearity
+```{r}
+xx=lm(latency_log ~ condition + Value, data = test_data_latency)
+library(car)
+vif(xx)
+```
+--> no collinearity issues
+
+
+* leverage
+```{r}
+cbind(coef(latency_glm_red),
+coef(latency_glm_red)+t(apply(X=dfbeta(latency_glm_red), MARGIN=2, FUN=range)))
+```
+--> no obvious leverage issues
+
+* 95% CI
+```{r}
+latency_glm_red_ci<- cbind(orig=coef(latency_glm_red), confint(object=latency_glm_red))
+```
+* output table
+```{r}
+latency_glm_red_output_table <-
+  bind_cols(as.data.frame(summary(latency_glm_red)$coef),
+            latency_glm_red_drop1,
+            latency_glm_red_ci) %>%
+  select(
+    Estimate,
+    SE = `Std. Error`,
+    LowerCI = `2.5 %`,
+    UpperCI = `97.5 %`,
+    scaled_dev = `scaled dev.`,
+    df = Df,
+    p = `Pr(>Chi)`,
+    t_test = `t value`,
+    p_t_test = `Pr(>|t|)`
+  ) %>% #
+  mutate(across(.cols = c(p), ~ format(round(.x, 3), nsmall = 3))) %>%
+  mutate(across(.cols = c(Estimate:scaled_dev), ~ format(round(.x, 2), nsmall = 2))) %>%
+  mutate(p = replace(p, p == 0, "<0.001"))
+
+write.csv(latency_glm_red_output_table, file = "saves/latency_analysis_results_table.csv")
+```
+
+
+## save workspace
+```{r}
+save.image(file = "workspace/concept_of_seeing.RData")
+
+```
+
