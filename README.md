@@ -15,8 +15,8 @@ Data analysis of "Canine perspective-taking: The concept of seeing in dogs"
 - **`functions/diagnostic_fcns.r`**: A script containing custom functions for diagnostics and assumption checks (function kindly provided by Roger Mundry).
 - **`saves`** folder: Saved model results.
 - **`graphics`** folder: Saved plots.  
--- **`choice_plot.png`**Barplot showing the number of dogs by condition that approached the seen and unseen bowl first in the test phase (N per condition: control condition: 37 dogs; cue condition: 36 dogs).   
--- **`approach_plot.png`**Barplot showing the number of dogs by condition that approached at least one of the bowls.  
+-- **`choice_plot.png`**: Barplot showing the number of dogs by condition that approached the seen and unseen bowl first in the test phase (N per condition: control condition: 37 dogs; cue condition: 36 dogs).   
+-- **`approach_plot.png`**: Barplot showing the number of dogs by condition that approached at least one of the bowls.  
 
 ---
 
