@@ -10,9 +10,13 @@ Data analysis of "Canine perspective-taking: The concept of seeing in dogs"
 
 ## File Descriptions
 
-- **`concept_of_seeing_test_phase.csv`**: This file contains behavioral data collected during the "Concept of Seeing" study.
-- **`concept_of_seeing.RData`**: This file stores pre-processed data and the fitted models.
-- **`diagnostic_fcns.r`**: A script containing custom functions for diagnostics and assumption checks (function kindly provided by Roger Mundry).
+- **`data/concept_of_seeing_test_phase.csv`**: This file contains behavioral data collected during the "Concept of Seeing" study.
+- **`workspace/concept_of_seeing.RData`**: This file stores pre-processed data and the fitted models.
+- **`functions/diagnostic_fcns.r`**: A script containing custom functions for diagnostics and assumption checks (function kindly provided by Roger Mundry).
+- **`saves`** folder: Saved model results.
+- **`graphics`** folder: Saved plots.  
+-- **`choice_plot.png`**Barplot showing the number of dogs by condition that approached the seen and unseen bowl first in the test phase (N per condition: control condition: 37 dogs; cue condition: 36 dogs).   
+-- **`approach_plot.png`**Barplot showing the number of dogs by condition that approached at least one of the bowls.  
 
 ---
 
